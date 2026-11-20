@@ -73,3 +73,27 @@ is skipped with a hint to turn it on.
 For the same reasons there is no "flash any stock firmware" script. The only supported update
 path is the UE BOOM app (BOOM 2 is supported on iOS/Android), which installs Logitech's latest
 version.
+
+## USB update path (investigated; doesn't work on 2.4.7)
+Logitech's "UE Speaker Update Assistant" 1.4.18 (2016) updates speakers over USB. The UE BOOM 2
+("Maximus") uses USB ID `046d:0a5e` in normal mode and `046d:0a5f` in DFU mode, and the app
+bundles firmware 2.0.97. Its USB protocol, reverse engineered into `uehid`:
+
+| Command (HID output report, 127 bytes) | Meaning | Reply seen |
+|---|---|---|
+| `56` | get boot mode | `00 56 00 01 01` (normal) / `00 56 00 00 07` (DFU pending) |
+| `51 07` | set boot mode 7 (DFU) | `00 51 01 07 01`, then `00 51 00 07 07` |
+| `51 01` | set boot mode 1 (normal) | n/a |
+| `59` | restart (speaker blinks, amp clicks, USB reconnects) | `59 00 00 00 07` |
+
+Tested on a 2.4.7 speaker: after `51 07` plus `59`, the speaker restarted but came back in normal
+mode with boot mode 1, and no DFU device appeared. Firmware 2.4.7 seems to ignore the USB DFU
+boot mode, so a stock or modified image can't be flashed (or backed up) over USB this way.
+`uehid enter-dfu` / `dfu-util` would work on speakers whose firmware still honours it.
+
+```sh
+swiftc -O -o uehid uehid.swift -framework IOKit
+./uehid info          # boot mode
+./uehid enter-dfu     # boot mode 7 + wait for 046d:0a5f
+./uehid send 59       # restart
+```
